@@ -1,0 +1,42 @@
+{
+  "compilerOptions": {
+    "target": "es5",
+    "module": "commonjs",
+    "lib": [
+      "dom",
+      "es2015.promise",
+      "es2015",
+      "es5",
+      "esnext"
+    ],
+    "declaration": true,
+    // "allowJs": true,
+    "noImplicitAny": false,
+    // "sourceMap": true,
+    "removeComments": true,
+    "jsx": "react",
+    "outDir": "dist/",
+    "rootDir": "./src",
+    "baseUrl": "./src",
+    "allowSyntheticDefaultImports": false,
+    "experimentalDecorators": true,
+    "noEmitHelpers": true,
+    "importHelpers": true,
+    "moduleResolution": "node",
+    "noImplicitReturns": true,
+    "strict": true
+  },
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    "**/winjs.base.js"
+  ],
+  "exclude": [
+    "./src/client",
+    "./bin",
+    "./node_modules",
+    "gulpfile.js",
+    "**/__tests__",
+    "**/__mocks__"
+  ]
+}

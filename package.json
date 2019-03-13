@@ -1,0 +1,51 @@
+{
+  "name": "type-redux",
+  "version": "0.9.0",
+  "description": "",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "node ./node_modules/typescript/bin/tsc",
+    "test": "jest",
+    "clean": "rm -rf dist"
+  },
+  "jest": {
+    "transform": {
+      "^.+\\.tsx?$": "ts-jest"
+    },
+    "testMatch": [
+      "<rootDir>/src/**/__test?(s)__/**/*.(test|spec).[tj]s?(x)"
+    ],
+    "modulePaths": [
+      "<rootDir>/dist"
+    ],
+    "moduleFileExtensions": [
+      "js",
+      "jsx",
+      "ts",
+      "tsx",
+      "json",
+      "node"
+    ],
+    "verbose": false
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lunascape/type-redux.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/lunascape/type-redux/issues"
+  },
+  "homepage": "https://github.com/lunascape/type-redux#readme",
+  "dependencies": {
+    "redux": "^4.0.1"
+  },
+  "devDependencies": {
+    "@types/jest": "^24.0.11",
+    "jest": "^24.5.0",
+    "ts-jest": "^24.0.0",
+    "tslint": "^5.14.0",
+    "typescript": "^3.3.3333"
+  }
+}
