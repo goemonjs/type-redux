@@ -27,9 +27,10 @@ function createTypeAsyncAction(type, payloadCreator) {
         promise.payload = type;
         promise.meta = {
             args: args,
-            creator: function (args, state) { return payloadCreator(args, state); },
+            creator: payloadCreator,
             resolve: resolve,
             reject: reject,
+            stateful: false
         };
         return promise;
     };
@@ -53,6 +54,44 @@ function createTypeAsyncAction(type, payloadCreator) {
     return actionCreator;
 }
 exports.createTypeAsyncAction = createTypeAsyncAction;
+function createTypeStatefulAction(type, payloadCreator) {
+    var actionCreator = function (args) {
+        var resolve, reject;
+        var promise = new Promise(function (res, rej) {
+            resolve = res;
+            reject = rej;
+        });
+        promise.type = exports.PENDING_TYPE;
+        promise.payload = type;
+        promise.meta = {
+            args: args,
+            creator: payloadCreator,
+            resolve: resolve,
+            reject: reject,
+            stateful: true
+        };
+        return promise;
+    };
+    actionCreator.type = type;
+    actionCreator.reducer = function (reducer) {
+        var typeReducer = function (state, action) { return reducer(state, action); };
+        typeReducer.type = type;
+        return typeReducer;
+    };
+    actionCreator.pending = function (reducer) {
+        var typeReducer = function (state, action) {
+            if (action.payload !== type) {
+                return undefined;
+            }
+            return reducer(state, action.meta);
+        };
+        typeReducer.type = exports.PENDING_TYPE;
+        return typeReducer;
+    };
+    actionCreator.isPending = function (state) { return isPending(type, state); };
+    return actionCreator;
+}
+exports.createTypeStatefulAction = createTypeStatefulAction;
 function createTypeReducer(initialState) {
     var handlers = [];
     for (var _i = 1; _i < arguments.length; _i++) {
@@ -77,13 +116,16 @@ function createTypeReducer(initialState) {
 }
 exports.createTypeReducer = createTypeReducer;
 exports.typeReduxMiddleware = function (store) { return function (next) { return function (action) {
-    if (!isTypeAsyncAction(action)) {
+    if (!isNeedCreatePayload(action)) {
         return next(action);
     }
-    var type = action.type, payload = action.payload, _a = action.meta, args = _a.args, creator = _a.creator, resolve = _a.resolve, reject = _a.reject;
+    var type = action.type, payload = action.payload, _a = action.meta, args = _a.args, resolve = _a.resolve, reject = _a.reject;
     next({ type: type, payload: payload, meta: args });
     try {
-        creator(args, store.getState()).then(function (result) {
+        var promise = action.meta.stateful ?
+            action.meta.creator(args, store.dispatch, store.getState) :
+            action.meta.creator(args, store.getState());
+        promise.then(function (result) {
             next({ type: payload, payload: result, meta: args });
             next({ type: COMPLETE_TYPE, payload: payload });
             resolve(result);
@@ -145,6 +187,14 @@ function isError(action) {
 }
 exports.isError = isError;
 function isTypeAsyncAction(action) {
-    return action && typeof action.then === 'function' && action.type === exports.PENDING_TYPE;
+    return isNeedCreatePayload(action) && !action.meta.stateful;
 }
 exports.isTypeAsyncAction = isTypeAsyncAction;
+function isNeedCreatePayload(action) {
+    return action && typeof action.then === 'function' && action.type === exports.PENDING_TYPE && action.meta;
+}
+exports.isNeedCreatePayload = isNeedCreatePayload;
+function isTypeStatefulAction(action) {
+    return isNeedCreatePayload(action) && action.meta.stateful;
+}
+exports.isTypeStatefulAction = isTypeStatefulAction;
