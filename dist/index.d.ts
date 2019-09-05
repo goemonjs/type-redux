@@ -14,6 +14,7 @@ export interface TypeAsyncAction<Type, Args, Payload, State> extends Promise<Pay
         resolve: (payload: Payload) => void;
         reject: (error: any) => void;
         stateful: false;
+        elapseTrackInterval: number;
     };
 }
 export interface TypeStatefulAction<Type, Args, Payload, State> extends Promise<Payload> {
@@ -25,6 +26,7 @@ export interface TypeStatefulAction<Type, Args, Payload, State> extends Promise<
         resolve: (payload: Payload) => void;
         reject: (error: any) => void;
         stateful: true;
+        elapseTrackInterval: number;
     };
 }
 export declare type TypeResolveAction<Type, Args, Payload> = {
@@ -57,6 +59,7 @@ export interface TypeAsyncActionCreator<Type, Args, Payload, State> {
     reducer<State>(reducer: (state: State, action: TypeResolveAction<Type, Args, Payload> | TypeRejectAction<Type, Args>) => Partial<State>): TypePartialReducer<Type, Payload, State>;
     pending<State>(reducer: (state: State, args: Args) => Partial<State>): TypePartialReducer<typeof PENDING_TYPE, Payload, State>;
     isPending<State>(state: State): boolean;
+    elapseTime<State>(state: State): number;
 }
 export interface TypeStatefulActionCreator<Type, Args, Payload, State> {
     (args: Args): TypeStatefulAction<Type, Args, Payload, State>;
@@ -64,15 +67,19 @@ export interface TypeStatefulActionCreator<Type, Args, Payload, State> {
     reducer<State>(reducer: (state: State, action: TypeResolveAction<Type, Args, Payload> | TypeRejectAction<Type, Args>) => Partial<State>): TypePartialReducer<Type, Payload, State>;
     pending<State>(reducer: (state: State, args: Args) => Partial<State>): TypePartialReducer<typeof PENDING_TYPE, Payload, State>;
     isPending<State>(state: State): boolean;
+    elapseTime<State>(state: State): number;
 }
 export declare function createTypeAction<Type extends string, Args, Payload = Args>(type: Type, payloadCreator: (args: Args) => Payload): TypeActionCreator<Type, Args, Payload>;
-export declare function createTypeAsyncAction<Type extends string, Args, Payload, State>(type: Type, payloadCreator: (args: Args, state: State) => Promise<Payload>): TypeAsyncActionCreator<Type, Args, Payload, State>;
-export declare function createTypeStatefulAction<Type extends string, Args, Payload, State>(type: Type, payloadCreator: (args: Args, dispatch: Dispatch<AnyAction>, getState: () => State) => Promise<Payload>): TypeStatefulActionCreator<Type, Args, Payload, State>;
+export declare function createTypeAsyncAction<Type extends string, Args, Payload, State>(type: Type, payloadCreator: (args: Args, state: State, elapseTrackInterval: number) => Promise<Payload>, elapseTrackInterval?: number): TypeAsyncActionCreator<Type, Args, Payload, State>;
+export declare function createTypeStatefulAction<Type extends string, Args, Payload, State>(type: Type, payloadCreator: (args: Args, dispatch: Dispatch<AnyAction>, getState: () => State) => Promise<Payload>, elapseTrackInterval?: number): TypeStatefulActionCreator<Type, Args, Payload, State>;
 export declare function createTypeReducer<State>(initialState: State | (() => State), ...handlers: TypePartialReducer<string, any, State>[]): TypeReducer<State>;
 export declare const typeReduxMiddleware: Middleware;
 export interface TypeReduxPendingState {
     [REDUX_TYPE]: {
         pendings: {
+            [key: string]: number;
+        };
+        elapses: {
             [key: string]: number;
         };
     };
@@ -82,13 +89,20 @@ export declare const typePendingReducerSet: {
         pendings: {
             [key: string]: number;
         };
+        elapses: {
+            [key: string]: number;
+        };
     } | undefined, action: AnyAction) => {
         pendings: {
+            [key: string]: number;
+        };
+        elapses: {
             [key: string]: number;
         };
     };
 };
 export declare function isPending<Type = string>(type: Type, state: any): boolean;
+export declare function elapseTime<Type = string>(type: Type, state: any): number;
 export declare function createTypeReduxInitialState(): TypeReduxPendingState;
 export declare function isError<Type, Args, Payload>(action: TypeResolveAction<Type, Args, Payload> | TypeRejectAction<Type, Args>): action is TypeRejectAction<Type, Args>;
 export declare function isTypeAsyncAction<Type, Args, Payload, State>(action: any): action is TypeAsyncAction<Type, Args, Payload, State>;

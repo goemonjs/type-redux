@@ -8,6 +8,7 @@ import { Reducer, Middleware, AnyAction, Dispatch } from 'redux';
 const REDUX_TYPE = '@@redux-type';
 export const PENDING_TYPE = '@@redux-type/PENDING';
 const COMPLETE_TYPE = '@@redux-type/COMPLETE';
+const ELAPSE_COUNT_TYPE = '@@redux-type/ELAPS_COUNT';
 
 export type TypeAction<Type, Payload> = {
   type: Type,
@@ -22,7 +23,8 @@ export interface TypeAsyncAction<Type, Args, Payload, State> extends Promise<Pay
     creator: (args: Args, state: State) => Promise<Payload>,
     resolve: (payload: Payload) => void,
     reject: (error: any) => void,
-    stateful: false
+    stateful: false,
+    elapseTrackInterval: number;
   };
 }
 
@@ -34,7 +36,8 @@ export interface TypeStatefulAction<Type, Args, Payload, State> extends Promise<
     creator: (args: Args, dispatch: Dispatch<AnyAction>, getState: () => State) => Promise<Payload>,
     resolve: (payload: Payload) => void,
     reject: (error: any) => void,
-    stateful: true
+    stateful: true,
+    elapseTrackInterval: number;
   };
 }
 
@@ -73,6 +76,7 @@ export interface TypeAsyncActionCreator<Type, Args, Payload, State> {
   reducer<State>(reducer: (state: State, action: TypeResolveAction<Type, Args, Payload> | TypeRejectAction<Type, Args>) => Partial<State>): TypePartialReducer<Type, Payload, State>;
   pending<State>(reducer: (state: State, args: Args) => Partial<State>): TypePartialReducer<typeof PENDING_TYPE, Payload, State>;
   isPending<State>(state: State): boolean;
+  elapseTime<State>(state: State): number;
 }
 
 export interface TypeStatefulActionCreator<Type, Args, Payload, State> {
@@ -81,6 +85,7 @@ export interface TypeStatefulActionCreator<Type, Args, Payload, State> {
   reducer<State>(reducer: (state: State, action: TypeResolveAction<Type, Args, Payload> | TypeRejectAction<Type, Args>) => Partial<State>): TypePartialReducer<Type, Payload, State>;
   pending<State>(reducer: (state: State, args: Args) => Partial<State>): TypePartialReducer<typeof PENDING_TYPE, Payload, State>;
   isPending<State>(state: State): boolean;
+  elapseTime<State>(state: State): number;
 }
 
 export function createTypeAction<Type extends string, Args, Payload = Args>(
@@ -99,7 +104,8 @@ export function createTypeAction<Type extends string, Args, Payload = Args>(
 
 export function createTypeAsyncAction<Type extends string, Args, Payload, State>(
   type: Type,
-  payloadCreator: (args: Args, state: State) => Promise<Payload>,
+  payloadCreator: (args: Args, state: State, elapseTrackInterval: number) => Promise<Payload>,
+  elapseTrackInterval = 0,
 ): TypeAsyncActionCreator<Type, Args, Payload, State> {
   const actionCreator: any = (args: Args): TypeAsyncAction<Type, Args, Payload, State> => {
     let resolve, reject;
@@ -114,7 +120,8 @@ export function createTypeAsyncAction<Type extends string, Args, Payload, State>
       creator: payloadCreator,
       resolve,
       reject,
-      stateful: false
+      stateful: false,
+      elapseTrackInterval: elapseTrackInterval,
     };
     return promise;
   };
@@ -135,12 +142,14 @@ export function createTypeAsyncAction<Type extends string, Args, Payload, State>
     return typeReducer;
   };
   actionCreator.isPending = (state: any) => isPending(type, state);
+  actionCreator.elapseTime = (state: any) => elapseTime(type, state);
   return actionCreator;
 }
 
 export function createTypeStatefulAction<Type extends string, Args, Payload, State>(
   type: Type,
   payloadCreator: (args: Args, dispatch: Dispatch<AnyAction>, getState: () => State) => Promise<Payload>,
+  elapseTrackInterval = 1000,
 ): TypeStatefulActionCreator<Type, Args, Payload, State> {
   const actionCreator: any = (args: Args): TypeStatefulAction<Type, Args, Payload, State> => {
     let resolve, reject;
@@ -155,7 +164,8 @@ export function createTypeStatefulAction<Type extends string, Args, Payload, Sta
       creator: payloadCreator,
       resolve,
       reject,
-      stateful: true
+      stateful: true,
+      elapseTrackInterval: elapseTrackInterval,
     };
     return promise;
   };
@@ -176,6 +186,7 @@ export function createTypeStatefulAction<Type extends string, Args, Payload, Sta
     return typeReducer;
   };
   actionCreator.isPending = (state: any) => isPending(type, state);
+  actionCreator.elapseTime = (state: any) => elapseTime(type, state);
   return actionCreator;
 }
 
@@ -219,15 +230,25 @@ export const typeReduxMiddleware: Middleware = (store) => (next) => (action) => 
     const promise = action.meta.stateful ?
       action.meta.creator(args, store.dispatch, store.getState) :
       action.meta.creator(args, store.getState());
+
+    const interval = action.meta.elapseTrackInterval;
+    let elapse = interval;
+    const elapseTimer = interval > 0 ? setInterval(() => {
+      next({ type: ELAPSE_COUNT_TYPE, payload, meta: elapse });
+      elapse += interval;
+    }, interval) : undefined;
     promise.then((result: any) => {
+      elapseTimer && clearInterval(elapseTimer);
       next({ type: payload, payload: result, meta: args });
       next({ type: COMPLETE_TYPE, payload });
       resolve(result);
     }, (error: any) => {
+      elapseTimer && clearInterval(elapseTimer);
       next({ type: payload, payload: error, error: true, meta: args });
       next({ type: COMPLETE_TYPE, payload });
       reject(error);
     }).catch((err) => {
+      elapseTimer && clearInterval(elapseTimer);
       next({ type: COMPLETE_TYPE, payload });
       reject(err);
     });
@@ -242,11 +263,12 @@ export const typeReduxMiddleware: Middleware = (store) => (next) => (action) => 
 export interface TypeReduxPendingState {
   [REDUX_TYPE]: {
     pendings: { [key: string]: number };
+    elapses: { [key: string]: number };
   };
 }
 
 export const typePendingReducerSet = {
-  [REDUX_TYPE]: (state: { pendings: { [key: string]: number } } = { pendings: {} }, action: AnyAction): typeof state => {
+  [REDUX_TYPE]: (state: { pendings: { [key: string]: number; }; elapses: { [key: string]: number; }; } = { pendings: {}, elapses: {} }, action: AnyAction): typeof state => {
     if (!action) {
       return state;
     }
@@ -257,17 +279,31 @@ export const typePendingReducerSet = {
         pendings: {
           ...pendings,
           [action.payload]: pendingCount + 1,
-        }
+        },
+        elapses: state.elapses
       };
     } else if (action.type === COMPLETE_TYPE) {
-      const { pendings } = state;
+      const { pendings, elapses } = state;
       const pendingCount = Math.max((pendings && pendings[action.payload]) || 1, 1);
       return {
         pendings: {
           ...pendings,
           [action.payload]: pendingCount - 1,
+        },
+        elapses: {
+          ...elapses,
+          [action.payload]: 0,
         }
       };
+    } else if (action.type === ELAPSE_COUNT_TYPE) {
+      const { pendings, elapses } = state;
+      return {
+        pendings,
+        elapses: {
+          ...elapses,
+          [action.payload]: action.meta,
+        }
+      }
     }
     return state;
   }
@@ -277,10 +313,15 @@ export function isPending<Type = string>(type: Type, state: any): boolean {
   return !!(state[REDUX_TYPE].pendings && state[REDUX_TYPE].pendings[type]);
 }
 
+export function elapseTime<Type = string>(type: Type, state: any): number {
+  return (state[REDUX_TYPE].elapses && state[REDUX_TYPE].elapses[type]);
+}
+
 export function createTypeReduxInitialState(): TypeReduxPendingState {
   return {
     [REDUX_TYPE]: {
-      pendings: {}
+      pendings: {},
+      elapses: {},
     }
   };
 }
